@@ -1,0 +1,79 @@
+{{- if .Values.deployments.dataops_ai }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: dataops-ai-service
+    {{- with $.Values.customLabels }}
+{{ toYaml . | nindent 4 }}
+    {{- end }} 
+  name: dataops-ai-service
+ 
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dataops-ai-service
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: dataops-ai-service
+        {{- with $.Values.customLabels }}
+{{ toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      volumes:
+        - name: datagaps-volume
+          {{- if .Values.useEmptyDir }}
+          emptyDir: {}
+          {{- else }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.pvcname }}
+          {{- end }}
+      {{- with .Values.dataopsserver.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.deployments.server.tolerations }}
+      tolerations:
+      {{ toYaml . | nindent 8 }}
+      {{- end }}  
+      containers:
+      - image: {{ .Values.image.dataops_ai_repository }}:{{ .Values.image.dataops_ai_tag }}
+        name: dataops-ai-service
+        env:
+        - name: OLLAMA_HOST
+          value: ollama
+        volumeMounts:
+        - name: datagaps-volume
+          mountPath: /opt/datagaps/DataOpsAIService/logs
+          subPath: server_logs
+          readOnly: false
+        - name: datagaps-volume
+          mountPath: /opt/datagaps/DataOpsAIService/conf
+          subPath: llm_conf
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: dataops-ai-service
+    {{- with $.Values.customLabels }}
+{{ toYaml . | nindent 4 }}
+    {{- end }}
+  name: dataops-ai-service
+  namespace: {{ .Values.namespace }}
+spec:
+  ports:
+  - name: dataops-ai
+    port: 8085
+    protocol: TCP
+    targetPort: 8085
+  selector:
+    app: dataops-ai-service
+  type: ClusterIP
+  
+{{- end }}  

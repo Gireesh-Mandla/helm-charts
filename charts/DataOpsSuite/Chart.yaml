@@ -1,0 +1,6 @@
+apiVersion: v2
+name: datagaps
+description: Helm chart for DataOpsSuite Deployment
+type: application
+version: "2026.3.0"
+appVersion: "2026.3.0.0"

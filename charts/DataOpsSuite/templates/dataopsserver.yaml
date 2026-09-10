@@ -1,0 +1,139 @@
+{{- if .Values.deployments.dataopsserver.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dataopsserver
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: dataopsserver
+    {{- with $.Values.customLabels }}
+{{ toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dataopsserver
+  template:
+    metadata:
+      labels:
+        app: dataopsserver
+        {{- with $.Values.customLabels }}
+{{ toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.deployments.server.tolerations }}
+      tolerations:
+      {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.dataopsserver.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ .Values.serviceaccount }}
+      volumes:
+        - name: datagaps-volume
+          {{- if .Values.useEmptyDir }}
+          emptyDir: {}
+          {{- else }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.pvcname }}
+          {{- end }}
+        - name: kube-api
+          projected:
+            defaultMode: 420
+            sources:
+              - serviceAccountToken:
+                  expirationSeconds: 3607
+                  path: kubernetes-token.txt
+              - configMap:
+                  items:
+                    - key: ca.crt
+                      path: ca.crt
+                  name: kube-root-ca.crt
+      containers:
+        - name: dataopsserver
+          image: {{ .Values.image.serverrepository }}:{{ .Values.image.servertag }}
+          resources:
+            requests:
+              cpu: {{ .Values.deployments.server.resources.requests.cpu }}
+              memory: {{ .Values.deployments.server.resources.requests.memory }}
+              ephemeral-storage: {{ .Values.deployments.server.resources.requests.ephemeralStorage }}
+            limits:
+              cpu: {{ .Values.deployments.server.resources.limits.cpu }}
+              memory: {{ .Values.deployments.server.resources.limits.memory }}
+              ephemeral-storage: {{ .Values.deployments.server.resources.limits.ephemeralStorage }}
+          ports:
+            - containerPort: 6055
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 6055
+            initialDelaySeconds: 90
+            periodSeconds: 10
+            failureThreshold: 90
+            successThreshold: 1
+          volumeMounts:
+            - mountPath: /opt/datagaps/DataOpsServer/tokens
+              name: kube-api
+            - mountPath: /opt/datagaps/DataOpsServer/logs
+              name: datagaps-volume
+              subPath: server_logs
+            - mountPath: /opt/datagaps/DataOpsServer/customjars
+              name: datagaps-volume
+              subPath: server_customjars
+            - mountPath: /opt/datagaps/data
+              name: datagaps-volume
+              subPath: data
+            {{- if .Values.cacerts.enabled }}
+            - mountPath: /opt/datagaps/DataOpsServer/files/jdk/lib/security/cacerts
+              name: datagaps-volume
+              subPath: "{{ .Values.cacerts.cacertspath }}"
+            {{- end }}
+              #- mountPath: /opt/datagaps/DataOpsServer/files/jdk/lib/security/cacerts
+              #name: datagaps-volume
+              #subPath: server_truststore/cacerts
+          env:
+            - name: PIPER_WORKERS
+              value: "{{ .Values.env.piperworkers }}"
+            - name: TIME_ZONE
+              value: "{{ .Values.env.timezone }}"
+            - name: QUERYBUILDER_URL
+              value: "{{ .Values.querybuilderurl }}"
+            - name: PG_HOST
+              value: "{{ .Values.db.host }}"
+            - name: PG_DB
+              value: "{{ .Values.db.name }}"
+            - name: PG_USER
+              value: "{{ .Values.db.user }}"
+            - name: CERT_DIR
+              value: "{{ .Values.env.CERT_DIR }}"
+            - name: PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-pwd
+                  key: DB_PASSWORD
+                  
+                  
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dataopsserver
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: dataopsserver
+    {{- with $.Values.customLabels }}
+{{ toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ports:
+  - port: 6055
+    protocol: TCP
+    targetPort: 6055
+  selector:
+    app: dataopsserver
+  type: ClusterIP
+
+{{- end }}

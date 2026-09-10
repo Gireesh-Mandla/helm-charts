@@ -1,0 +1,239 @@
+namespace: datagaps  #namespacename
+appVersion: "2026.3.0.0"
+serviceaccount: datagaps      #serviceaccountname
+pvcname: datagapspvc
+pvname: datagapspv
+azuresecretname: azure-secret
+useEmptyDir: false   # true will use `emptyDir`, false will use PVC
+customLabels:
+  env: helm
+storageAccountName: storageaccountname                # CHANGE
+storageAccessKey: "keychangeu5JhfzpAQJNt3Ervxh5BuxyaBh+oIhyfUZYqKQ+BuryfKl/g3Inw8dD/Owz3+AStEwlTTg=="  # CHANGE
+resourceGroup: resourcegroupname                      # CHANGE
+VolumeShareName: share-name                           # CHANGE if needed
+VolumeFolderName: folder-name                         # CHANGE if needed
+azuresecretname: azure-secret
+rbac: 
+ enabled: true
+
+
+image:
+  serverrepository: datagaps/dataopsserver
+  servertag: 2026.3.0.0-lite
+  querybuilderrepository: datagaps/querybuilder
+  querybuildertag: 2026.3.0.0
+  dataops_ai_repository: datagaps/dataops-ai-service
+  dataops_ai_tag: 2026.3.0.0
+  dataopsmq_repository: datagaps/dataopsmq
+  dataopsmq_tag: 2.0.0
+  pythonservice_repository: datagaps/dataops-python-service
+  pythonservice_tag: 2026.3.0.0
+  engine_repository: datagaps/dataopsengine
+  engine_tag: 2026.3.0.0
+  sparkpy_repository: datagaps/spark-py
+  sparkpy_tag: 2026.3.0.0
+
+db:
+  host: replace.postgres.database.azure.com           # CHANGE
+  name: databasename                                   # CHANGE
+  user: postgresusername                               # CHANGE
+  dbPassword: "azurepostgrespassword"    
+
+env:
+  piperworkers: "16"                                   #default
+  timezone: "UTC"                                      #specify the TimeZone
+  querybuilderurl: http://querybuilder:5000  
+  tdmurl: http://localhost:8001    # UPDATE host/IP address
+
+cacerts:
+  enabled: false
+  cacertspath: "data/cacerts"                          #Specify the Subpath for the cacerts mount
+
+persistentVolume:
+  capacity: 5Gi
+  accessMode: ReadWriteMany
+  reclaimPolicy: Retain
+  storageClassName: azurefile-csi
+  csiDriver: file.csi.azure.com
+  volumeHandle: k8sstoragefordatagaps
+  mountOptions:
+    - dir_mode=0777
+    - file_mode=0777
+    - uid=0
+    - gid=0
+    - mfsymlinks
+    - cache=strict
+    - nosharesock
+    - nobrl
+
+deployments:
+  namespace:
+    enabled: true
+  pv:
+    enabled: true
+  pvc:
+    enabled: true
+  azuresecrets: 
+    enabled: true
+  dbsecrets: 
+    enabled: true
+  serviceaccount: 
+    enabled: true
+  dataopsserver: 
+    enabled: true
+  querybuilder:
+    enabled: true
+  dataops_ai:
+    enabled: true
+  pythonservice:
+    enabled: true
+    replicas: 1
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "2"
+        memory: "4Gi"
+  dataopsmq: 
+    enabled: true
+  nginx:
+    enabled: true
+  engine:
+    enabled: false
+  enginecluster:
+    enabled: false
+    replicas: 1
+    nodeSelector:
+      app: dataopsengine16                #replace with the label of the node 
+    tolerations:                          #replace with the taints of the node
+      - key: "app"
+        operator: "Equal"
+        value: "dataopsengine"
+        effect: "NoSchedule"
+    resources:
+      main:
+        requests:
+          cpu: "8"
+          memory: "30Gi"
+      bridge:
+        requests:
+          cpu: "1"
+          memory: "2Gi"
+
+  server:
+    tolerations:
+      - key: "app"
+        operator: "Equal"
+        value: "dataopsserver"
+        effect: "NoSchedule"
+    replicas: 1
+    resources:
+      requests:
+        cpu: "3"
+        memory: 8Gi
+        ephemeralStorage: "50Gi"
+      limits:
+        cpu: "15"
+        memory: 16Gi
+        ephemeralStorage: "150Gi"
+
+  querybuilder:
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+  dataops_ai:
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "4"
+        memory: "8Gi"
+
+dataopsserver:
+  nodeSelector:
+    app: dataopsserver
+
+engine:
+  name: dataopsengine
+  replicas: 1
+  nodeSelector:
+    app: dataopsengine16                 #replace with the label of the node
+  tolerations:                           #replace with the taints of the node
+    - key: "app"
+      operator: "Equal"
+      value: "dataopsengine"
+      effect: "NoSchedule"
+  resources:
+    main:
+      requests:
+        cpu: 8
+        memory: "30Gi"
+    bridge:
+      requests:
+        cpu: 1
+        memory: "2Gi"
+
+enginecluster:
+  name: dataopsengine-cluster
+  env:
+    sparkConfDir: /opt/datagaps/DataOpsEngine/spark/conf
+    driverMemory: "2g"
+    sparkMaster: "k8s://https://kubernetes.default.svc.cluster.local"
+    deployMode: client
+  sparkConf:
+    spark.driver.maxResultSize: "100MB"
+    spark.dynamicAllocation.maxExecutors: "100"
+    spark.driver.memoryOverhead: "4G"
+    spark.executor.memoryOverhead: "4G"
+    spark.kubernates.executor.node.selector.app: "executor1"        #replace with the label of the worker node
+    spark.driver.memory: "8G"
+    spark.executor.memory: "8G"
+  executorYaml: |
+    apiVersion: v1
+    kind: Pod
+    spec:
+      containers:
+        - name: executor
+          image: datagaps/spark-py:2026.1.0.0
+
+nginx:
+  internal: true
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+ingress:
+  enabled: false
+  className: nginx
+  host: helmdatagapsaks.datagapsinc.in      
+  tls:
+    enabled: false
+    secretName: datagaps-tls
+    cert: BASE64_ENCODED_TLS_CERT  # use base64 output here
+    key: BASE64_ENCODED_TLS_KEY    # use base64 output here
+    
+cloud:
+  provider: azure   # Options: azure | aws
+  azure:
+    storageClassName: azurefile-csi
+    csiDriver: file.csi.azure.com
+    volumeHandle: k8sstoragefordatagaps
+    annotations:
+      service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+  aws:
+    storageClassName: efs-sc
+    csiDriver: efs.csi.aws.com
+    volumeHandle: fs-12345678
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-internal: "true"

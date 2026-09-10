@@ -1,0 +1,82 @@
+{{- if .Values.deployments.engine.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.engine.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.engine.name }}
+    {{- if .Values.customLabels }}
+    {{- toYaml .Values.customLabels | nindent 4 }}
+    {{- end }}
+spec:
+  replicas: {{ .Values.engine.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Values.engine.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.engine.name }}
+    spec:
+      serviceAccountName: {{ .Values.serviceaccount }}
+      nodeSelector:
+        {{- toYaml .Values.engine.nodeSelector | nindent 8 }}
+      tolerations:
+        {{- toYaml .Values.engine.tolerations | nindent 8 }}
+      containers:
+        - name: dataopsengine
+          image: "{{ .Values.image.engine_repository }}:{{ .Values.image.engine_tag }}"
+          env:
+            - name: CLUSTER
+              value: "standalone"
+            - name: LIVY_LOG_DIR
+              value: "/opt/datagaps/DataOpsEngine/livy/logs"
+          ports:
+            - containerPort: 8998
+          resources:
+            {{- toYaml .Values.engine.resources.main | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /sessions
+              port: 8998
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 30
+          volumeMounts:
+            - name: spark-logs
+              mountPath: /opt/datagaps/DataOpsEngine/spark/logs
+            - name: datagaps-volume
+              mountPath: /opt/datagaps/DataOpsEngine/spark/history
+              subPath: spark/history
+            - name: datagaps-volume
+              mountPath: /opt/datagaps/data
+              subPath: data
+
+        - name: dataopsenginebridge
+          image: "{{ .Values.image.engine_repository }}:{{ .Values.image.engine_tag }}"
+          env:
+            - name: CLUSTER
+              value: "bridge"
+          ports:
+            - containerPort: 9111
+          resources:
+            {{- toYaml .Values.engine.resources.bridge | nindent 12 }}
+          volumeMounts:
+            - name: spark-logs
+              mountPath: /opt/datagaps/DataOpsEngine/spark/logs
+            - name: datagaps-volume
+              mountPath: /opt/datagaps/data
+              subPath: data
+      volumes:
+        - name: spark-logs
+          emptyDir: {}
+        - name: datagaps-volume
+          {{- if .Values.useEmptyDir }}
+          emptyDir: {}
+          {{- else }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.pvcname }}
+          {{- end }}
+{{- end }}

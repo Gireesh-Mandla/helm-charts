@@ -1,0 +1,129 @@
+{{- if .Values.deployments.enginecluster.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.enginecluster.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.enginecluster.name }}
+    {{- with .Values.customLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  replicas: {{ .Values.deployments.enginecluster.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Values.enginecluster.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.enginecluster.name }}
+    spec:
+      serviceAccountName: {{ .Values.serviceaccount }}
+
+      {{- if .Values.deployments.enginecluster.nodeSelector }}
+      nodeSelector:
+{{ toYaml .Values.deployments.enginecluster.nodeSelector | nindent 8 }}
+      {{- end }}
+
+      {{- if .Values.deployments.enginecluster.tolerations }}
+      tolerations:
+{{ toYaml .Values.deployments.enginecluster.tolerations | nindent 8 }}
+      {{- end }}
+
+      containers:
+        - name: dataopsengine
+          image: "{{ .Values.image.engine_repository }}:{{ .Values.image.engine_tag }}"
+          ports:
+            - containerPort: 8998
+          env:
+            - name: SPARK_CONF_DIR
+              value: {{ .Values.enginecluster.env.sparkConfDir | quote }}
+            - name: SPARK_DRIVER_MEMORY
+              value: {{ .Values.enginecluster.env.driverMemory | quote }}
+            - name: SPARK_K
+              value: {{ .Values.enginecluster.env.sparkMaster | quote }}
+            - name: DEPLOY_MODE
+              value: {{ .Values.enginecluster.env.deployMode | quote }}
+            - name: EXECUTOR_IMAGE
+              value: "{{ .Values.image.executor_repository }}:{{ .Values.image.executor_tag }}"
+            - name: DRIVER_HOST
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: status.podIP
+            - name: CLUSTER
+              value: "k8s"
+            - name: LIVY_LOG_DIR
+              value: "/opt/datagaps/DataOpsEngine/livy/logs"
+          resources:
+            {{- toYaml .Values.deployments.enginecluster.resources.main | nindent 12 }}
+          readinessProbe:
+            failureThreshold: 30
+            httpGet:
+              path: /sessions
+              port: 8998
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - name: spark-logs
+              mountPath: /opt/datagaps/DataOpsEngine/spark/logs
+            - name: datagaps-volume
+              mountPath: /opt/datagaps/DataOpsEngine/spark/history
+              subPath: spark/history
+            - name: executor-yaml
+              mountPath: /opt/datagaps/DataOpsEngine/spark/conf/executor.yaml
+              subPath: executor.yaml
+            - name: datagaps-volume
+              mountPath: /opt/datagaps/data
+              subPath: data
+
+        - name: dataopsenginebridge
+          image: "{{ .Values.image.engine_repository }}:{{ .Values.image.engine_tag }}"
+          ports:
+            - containerPort: 9111
+          env:
+            - name: CLUSTER
+              value: "bridge"
+          resources:
+            {{- toYaml .Values.deployments.enginecluster.resources.bridge | nindent 12 }}
+          volumeMounts:
+            - name: spark-logs
+              mountPath: /opt/datagaps/DataOpsEngine/spark/logs
+            - name: datagaps-volume
+              mountPath: /opt/datagaps/data
+              subPath: data
+
+      volumes:
+        - name: spark-logs
+          emptyDir: {}
+        - name: executor-yaml
+          configMap:
+            name: datagaps 
+            items:
+              - key: executor.yaml
+                path: executor.yaml
+        - name: datagaps-volume
+          {{- if .Values.useEmptyDir }}
+          emptyDir: {}
+          {{- else }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.pvcname }}
+          {{- end }}
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.enginecluster.name }}
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    app: {{ .Values.enginecluster.name }}
+  ports:
+    - name: livy
+      port: 8998
+    - name: bridge
+      port: 9111
+{{- end }}

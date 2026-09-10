@@ -1,0 +1,88 @@
+{{- if .Values.deployments.nginx.enabled }}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: datagaps-nginx
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: datagaps-nginx
+    {{- with $.Values.customLabels }}
+{{ toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: datagaps-nginx
+  template:
+    metadata:
+      labels:
+        app: datagaps-nginx
+        {{- with $.Values.customLabels }}
+{{ toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.dataopsserver.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.deployments.server.tolerations }}
+      tolerations:
+{{ toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ .Values.serviceaccount }}
+      containers:
+        - name: nginx
+          image: nginx:stable-alpine3.20-perl
+          volumeMounts:
+            - mountPath: /opt/certs
+              name: datagaps-volume
+              subPath: certs
+            - mountPath: /etc/nginx/conf.d/datagaps.conf
+              name: datagaps-conf
+              subPath: datagaps.conf
+      volumes:
+        - name: datagaps-volume
+          {{- if .Values.useEmptyDir }}
+          emptyDir: {}
+          {{- else }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.pvcname }}
+          {{- end }}
+        - name: datagaps-conf
+          configMap:
+            name: datagaps
+            items:
+              - key: datagaps.conf
+                path: datagaps.conf
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: datagaps-nginx
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: datagaps-nginx
+    {{- with $.Values.customLabels }}
+{{ toYaml . | nindent 4 }}
+    {{- end }}
+  {{- if .Values.nginx.internal }}
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+  {{- end }}
+spec:
+  type: LoadBalancer
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+    - name: https
+      port: 443
+      targetPort: 443
+  selector:
+    app: datagaps-nginx
+
+{{- end }}

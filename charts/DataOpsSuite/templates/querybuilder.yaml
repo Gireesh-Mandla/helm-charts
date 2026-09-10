@@ -1,0 +1,94 @@
+{{- if .Values.deployments.querybuilder }}
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  labels:
+    app: querybuilder
+    {{- with $.Values.customLabels }}
+{{ toYaml . | nindent 4 }}
+    {{- end }}
+  name: querybuilder
+  namespace: {{ .Values.namespace }}
+  
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: querybuilder
+  template:
+    metadata:
+      labels:
+        app: querybuilder
+        {{- with $.Values.customLabels }}
+{{ toYaml . | nindent 8 }}
+        {{- end }}
+      
+    spec:
+      {{- with .Values.deployments.server.tolerations }}
+      tolerations:
+      {{ toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+      - name: datagaps-volume
+        {{- if .Values.useEmptyDir }}
+        emptyDir: {}
+        {{- else }}
+        persistentVolumeClaim:
+          claimName: {{ .Values.pvcname }}
+        {{- end }}
+      containers:
+      - name: querybuilder
+        image: {{ .Values.image.querybuilderrepository }}:{{ .Values.image.querybuildertag }}
+        ports:
+          - containerPort: 5000
+            protocol: TCP
+          - containerPort: 5001
+            protocol: TCP
+        
+        env:
+            - name: PG_HOST
+              value: {{ .Values.db.host }}
+            - name: PG_PORT
+              value: "5432"
+            - name: PG_DB
+              value: {{ .Values.db.name }}
+            - name: PG_USER
+              value: {{ .Values.db.user }}
+            - name: PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-pwd
+                  key: DB_PASSWORD
+      {{- with .Values.dataopsserver.nodeSelector }}
+      nodeSelector:
+{{- toYaml . | nindent 8 }}
+      {{- end }}
+        
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: querybuilder
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: querybuilder
+    {{- with $.Values.customLabels }}
+{{ toYaml . | nindent 4 }}
+    {{- end }}
+  
+spec:
+  ipFamilies:
+  - IPv4
+  ports:
+  - name: 5000-tcp
+    protocol: TCP
+    port: 5000
+    targetPort: 5000
+  
+  
+  type: ClusterIP
+  selector:
+    app: querybuilder
+
+{{- end }}
+

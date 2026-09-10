@@ -1,0 +1,78 @@
+{{- if .Values.deployments.dataopsserver.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: datagaps
+  namespace: {{ .Values.namespace }} 
+data:
+  datagaps.conf: |
+    server {
+        listen       80;
+        listen  [::]:80;
+        server_name  localhost;
+        root /usr/share/nginx/html; 
+
+        client_max_body_size 100M;
+
+        location / {
+            proxy_pass http://dataopsserver:6055;
+            proxy_set_header X-Forwarded-Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-Server $host;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+
+            client_max_body_size 200M; 
+            proxy_connect_timeout 900;
+            proxy_send_timeout 900;
+            proxy_read_timeout 900; 
+        } 
+
+        location /api {
+            proxy_pass http://querybuilder:5000/api;
+            proxy_set_header X-Forwarded-Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-Server $host;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+            client_max_body_size 200M;
+            proxy_connect_timeout 900;
+            proxy_send_timeout 900;
+            proxy_read_timeout 900;
+        } 
+
+        error_page 404 /404.html; 
+        location = /404.html {}
+
+        error_page 500 502 503 504 /50x.html; 
+        location = /50x.html {}
+    }
+  executor.yaml: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: spark-executor-template
+      namespace: {{ .Values.namespace }}
+      labels:
+        app: executor
+        {{- with $.Values.customLabels }}
+{{ toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      volumes:
+      - name: datagaps-volume
+        persistentVolumeClaim:
+          claimName: {{ .Values.pvcname }}
+      containers:
+      - image: "{{ .Values.image.sparkpy_repository }}:{{ .Values.image.sparkpy_tag }}"
+        volumeMounts:
+        - name: datagaps-volume
+          mountPath: /opt/datagaps/data
+          subPath: data
+          readOnly: false
+          
+{{- end }}

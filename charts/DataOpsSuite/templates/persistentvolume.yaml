@@ -1,0 +1,35 @@
+{{- if .Values.deployments.pv.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ .Values.pvname }}
+  labels:
+    app: dataops
+    {{- with .Values.customLabels }}
+{{ toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  capacity:
+    storage: {{ .Values.persistentVolume.capacity }}
+  accessModes:
+    - {{ .Values.persistentVolume.accessMode | default "ReadWriteMany" }}
+  persistentVolumeReclaimPolicy: {{ .Values.persistentVolume.reclaimPolicy | default "Retain" }}
+  storageClassName: {{ .Values.persistentVolume.storageClassName }}
+  csi:
+    driver: {{ .Values.persistentVolume.csiDriver | default "file.csi.azure.com" }}
+    readOnly: false
+    volumeHandle: {{ .Values.persistentVolume.volumeHandle | default "k8sstoragefordatagaps" }}
+    volumeAttributes:
+      resourceGroup: {{ .Values.resourceGroup }}
+      storageAccount: {{ .Values.storageAccountName }}
+      shareName: {{ .Values.VolumeShareName }}
+      folderName: {{ .Values.VolumeFolderName }}
+    nodeStageSecretRef:
+      name: {{ .Values.azuresecretname }}
+      namespace: {{ .Values.namespace }}
+  mountOptions:
+    {{- range .Values.persistentVolume.mountOptions }}
+    - {{ . }}
+    {{- end }}
+{{- end }}

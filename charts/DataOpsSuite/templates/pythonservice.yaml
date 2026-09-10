@@ -1,0 +1,79 @@
+{{- if .Values.deployments.pythonservice.enabled }}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dataops-python-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: dataops-python-service
+    {{- with .Values.customLabels }}
+{{ toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  replicas: {{ .Values.deployments.pythonservice.replicas | default 1 }}
+  selector:
+    matchLabels:
+      app: dataops-python-service
+  template:
+    metadata:
+      labels:
+        app: dataops-python-service
+        {{- with .Values.customLabels }}
+{{ toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.deployments.server.tolerations }}
+      tolerations:
+{{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.dataopsserver.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: datagaps-volume
+          {{- if .Values.useEmptyDir }}
+          emptyDir: {}
+          {{- else }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.pvcname }}
+          {{- end }}
+      containers:
+        - name: dataops-python-service
+          image: {{ .Values.image.pythonservice_repository }}:{{ .Values.image.pythonservice_tag }}
+          resources:
+            requests:
+              cpu: {{ .Values.deployments.pythonservice.resources.requests.cpu | quote }}
+              memory: {{ .Values.deployments.pythonservice.resources.requests.memory | quote }}
+            limits:
+              cpu: {{ .Values.deployments.pythonservice.resources.limits.cpu | quote }}
+              memory: {{ .Values.deployments.pythonservice.resources.limits.memory | quote }}
+          volumeMounts:
+            - name: datagaps-volume
+              mountPath: /opt/datagaps/DataOpsPythonService/logs
+              subPath: server_logs
+              readOnly: false
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dataops-python-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: dataops-python-service
+    {{- with .Values.customLabels }}
+{{ toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  type: ClusterIP
+  selector:
+    app: dataops-python-service
+  ports:
+    - name: python-service
+      port: 9001
+      protocol: TCP
+      targetPort: 9001
+
+{{- end }}

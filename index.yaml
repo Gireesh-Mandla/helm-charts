@@ -1,0 +1,14 @@
+apiVersion: v1
+entries:
+  datagaps:
+  - apiVersion: v2
+    appVersion: 2026.3.0.0
+    created: "2026-09-10T18:53:51.3580757+05:30"
+    description: Helm chart for DataOpsSuite Deployment
+    digest: 00d202571470d7a2d5ec8e3de9b9dd91f1326b3e9f8c31a587685610817bc4d1
+    name: datagaps
+    type: application
+    urls:
+    - https://Gireesh-Mandla.github.io/helm-charts/datagaps-2026.3.0.tgz
+    version: 2026.3.0
+generated: "2026-09-10T18:53:51.3552475+05:30"

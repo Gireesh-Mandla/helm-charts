@@ -1,0 +1,22 @@
+{{- if .Values.rbac.enabled }}
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: datagaps-rolebinding
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: datagaps-rolebinding
+    {{- with $.Values.customLabels }}
+{{ toYaml . | nindent 4 }}
+    {{- end }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: datagaps-role
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.serviceaccount }}
+    namespace: {{ .Values.namespace }}
+    
+{{- end }}

@@ -1,0 +1,88 @@
+{{- if .Values.deployments.dataopsmq.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: dataopsmq
+    {{- with $.Values.customLabels }}
+{{ toYaml . | nindent 4 }}
+    {{- end }}
+  name: dataopsmq
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dataopsmq
+  template:
+    metadata:
+      labels:
+        app: dataopsmq
+        {{- with $.Values.customLabels }}
+{{ toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.deployments.server.tolerations }}
+      tolerations:
+      {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.dataopsserver.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - image: {{ .Values.image.dataopsmq_repository }}:{{ .Values.image.dataopsmq_tag }}
+        imagePullPolicy: Always
+        name: dataopsmq
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+          limits:
+            cpu: "2"
+            memory: "2048Mi"
+        env:
+        - name: RABBITMQ_MNESIA_BASE
+          value: /app/rabbitmq/mnesia
+        - name: RABBITMQ_LOG_BASE
+          value: /app/rabbitmq/log
+        volumeMounts:
+        - mountPath: /app/rabbitmq/
+          name: datagaps-volume
+          subPath: dataopsmq
+      volumes:
+      - name: datagaps-volume
+        {{- if .Values.useEmptyDir }}
+        emptyDir: {}
+        {{- else }}
+        persistentVolumeClaim:
+          claimName: {{ .Values.pvcname }}
+        {{- end }}
+          
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: dataopsmq
+    {{- with $.Values.customLabels }}
+{{ toYaml . | nindent 4 }}
+    {{- end }}
+  name: dataopsmq
+  namespace: {{ .Values.namespace }}
+spec:
+  ports:
+  - name: mq
+    port: 5672
+    protocol: TCP
+    targetPort: 5672
+  - name: mq-ui
+    port: 15672
+    protocol: TCP
+    targetPort: 15672
+  selector:
+    app: dataopsmq
+  type: ClusterIP
+  
+{{- end }}

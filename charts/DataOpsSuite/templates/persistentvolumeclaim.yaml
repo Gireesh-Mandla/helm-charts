@@ -1,0 +1,21 @@
+{{- if .Values.deployments.pvc.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.pvcname }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: dataops
+    {{- with .Values.customLabels }}
+{{ toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  accessModes:
+    - {{ .Values.persistentVolume.accessMode | default "ReadWriteMany" }}
+  storageClassName: {{ .Values.persistentVolume.storageClassName }}
+  volumeName: {{ .Values.pvname }}
+  resources:
+    requests:
+      storage: {{ .Values.persistentVolume.capacity }}
+{{- end }}
